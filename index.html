@@ -1,0 +1,234 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Snake3D</title>
+<style>
+*{
+	margin:0;
+	padding:0;
+}
+html, body, canvas{
+	width:100%;
+	height:100%;
+}
+body{
+	font:15px/1.5 Helvetica, sans-serif;
+}
+canvas{
+	display:block;
+}
+</style>
+</head>
+
+<body>
+	<script src="js/Jesm4.min.js"></script>
+	<script src="js/three.min.js"></script>
+	<script>
+		var Jogo={
+			pause:false,
+			listaEventos:[],
+			
+			iniciar:function(){
+				if(window.webkitSpeechRecognition){
+					(function z(){
+						var rec=new webkitSpeechRecognition();
+						rec.lang='pt-br';
+						rec.onresult=function(e){
+							for(var alts=e.results[0], len=alts.length;len--;Jogo.setDirecao(alts[len].transcript));
+							z();
+						};
+						rec.start();
+					})();
+				}
+				this.reiniciar();
+			},
+			reiniciar:function(){
+				// limpa coisas antigas
+				clearInterval(this.meteint);
+				Jesm.Core.animator.delTarefaByObj(this);
+				for(var len=this.listaEventos.length;len--;Jesm.delEvento(this.listaEventos.pop()));				
+				
+				// recria
+				var inner=Jesm.Cross.inner();
+				this.scene=new THREE.Scene();
+				this.camera=new THREE.PerspectiveCamera(75, inner[0]/inner[1], .1, 1000);
+				this.renderer=new THREE.WebGLRenderer();
+				this.renderer.setSize(inner[0], inner[1]);
+				this.renderer.setClearColor(0x333333, 1);
+				document.body.appendChild(this.renderer.domElement);
+				
+				var raio=this.valores.raio;
+				this.valores.formaBola=new THREE.SphereGeometry(raio, 16, 16);
+				this.valores.passo=raio*2;
+				this.direcao=[0, 1];
+				this.setCamera();
+				new this.create.Cubo();
+				this.snake=new this.create.Snake();
+				
+				this.meteint=setInterval(function(){
+					if(Jogo.pause)
+						return;
+					Jogo.andar();
+				}, this.valores.intervalo);
+				
+				this.listaEventos.push(Jesm.addEvento(window, 'keydown', function(e){
+					var tecla=e.which;
+					if(tecla==27)
+						this[this.pause?'continuar':'pausar']();
+					else if(!this.pause)
+						this.setDirecao(tecla);
+				}, this, 1));
+				
+				Jesm.Core.animator.addTarefa(function(){
+					if(this.pause)
+						return;
+					this.renderer.render(this.scene, this.camera);
+				}, this);
+			},
+			
+			incluir:function(obj){
+				this.scene.add(obj.el);
+			},
+			andar:function(){
+				this.snake.andar(this.direcao);
+			},
+			setDirecao:function(a){
+				var d;
+				switch(a){
+					case 37: case 'left': case 'esquerda':
+						d=[0, -1];
+					break;
+					case 38: case 'top': case 'up': case 'topo': case 'cima':
+						d=[1, 1];
+					break;
+					case 39: case 'right': case 'direita':
+						d=[0, 1];
+					break;
+					case 40: case 'bottom': case 'down': case 'baixo':
+						d=[1, -1];
+					break;
+					case 90: case 'away': case 'longe': case 'afasta':
+						d=[2, -1];
+					break;
+					case 88: case 'close': case 'approach': case 'perto': case 'aproxima':
+						d=[2, 1];
+					break;
+					default:
+						return;
+				}
+				if(this.direcao[0]!=d[0]||this.direcao[1]==d[1])
+					this.direcao=d;
+			},
+			
+			pausar:function(){
+				this.pause=true;
+			},
+			continuar:function(){
+				this.pause=false;
+			},
+			
+			create:{
+				Cubo:function(){
+					
+					this.getLinha=function(arr){
+						var ret=new THREE.Geometry();
+						for(var x=0, len=arr.length;x<len;x++){
+							var i=arr[x];
+							ret.vertices.push(new THREE.Vector3(i[0], i[1], i[2]));
+						}
+						return new THREE.Line(ret, Jogo.valores.linha.material);
+					};
+					this.criarLado=function(arr){
+						for(var passo=Jogo.valores.passo, acres=passo*2, linhas=Jogo.valores.numLinhas, ate=linhas*passo/2, x=-ate;x<=ate;x+=acres){
+							var linha=this.getLinha([[-ate, x, -ate], [ate, x, -ate], [ate, x, ate], [-ate, x, ate], [-ate, x, -ate]]);
+							Jogo.scene.add(linha);
+						}
+					}
+					this.criarLado();
+					/*var size=Jogo.valores.passo*Jogo.valores.numLinhas*2;
+					this.el=new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({wireframe:true}));*/
+				},
+				Snake:function(){
+					this.bolas=[];
+					this.moves=[];
+					
+					this.andar=function(arr){
+						this.moves.unshift(arr.slice());
+						for(var len=this.bolas.length, passo=Jogo.valores.passo;len--;){
+							var bola=this.bolas[len], dir=this.moves[len];
+							bola.pos[dir[0]]+=dir[1]*passo;
+							bola.updatePos();
+						}
+						this.moves.pop();
+					};
+					
+					this.verificarColisao=function(){
+						
+					};
+					
+					this.aumentar=function(arr, x){
+						var bola=new Jogo.create.SnakeSegment(arr, x);
+						this.bolas.push(bola);
+						Jogo.incluir(bola);
+					};
+					
+					for(var x=0;x<6;x++){
+						this.aumentar([x*-Jogo.valores.passo, 0, 0], !x);
+						this.moves.push(Jogo.direcao.slice());
+					}
+				},
+				
+				SnakeSegment:function(arr, cabeca){
+					var modelo=Jogo.valores[cabeca?'cabeca':'corpo'];
+					
+					this.pos=arr;
+					//ret.raio=modelo.raio;
+					this.reachble=true;
+					this.el=new THREE.Mesh(Jogo.valores.formaBola, modelo.material);
+					
+					this.setReachble=function(a){
+						this.reachble=!!a;
+						// mudar cor bola
+					};
+					this.updatePos=function(){
+						for(var c=['x', 'y', 'z'], len=c.length;len--;this.el.position[c[len]]=this.pos[len]);
+					}					
+					this.updatePos(arr);
+				},
+			},
+			setCamera:function(){
+				this.camera.position.z=Math.sqrt(Math.pow(this.valores.raio*this.valores.numLinhas, 2)*3);	
+			},
+			
+			valores:{
+				intervalo:60,
+				numLinhas:30,
+				linhas:[30, 30, 30],
+				raio:5,
+				cabeca:{
+					material:new THREE.MeshBasicMaterial({color:0x0000FF})
+				},					
+				corpo:{
+					material:new THREE.MeshBasicMaterial({color:0xFFFFFF}),
+					materialReachble:new THREE.MeshBasicMaterial({color:0xB78FF7}),
+					materialSucess:new THREE.MeshBasicMaterial({color:0xFFFFFF}),
+					materialFail:new THREE.MeshBasicMaterial({color:0xFFFFFF}),
+				},
+				bola:{
+					material:new THREE.MeshBasicMaterial({color:0x00FF00}),
+					material:new THREE.MeshBasicMaterial({color:0x00FF00}),
+				},
+				linha:{
+					material:new THREE.LineBasicMaterial({ color: 0xffffff })
+				},
+			}
+		};
+		
+		Jesm.addEvento(window, 'load', function(){
+			this.iniciar();
+		}, Jogo);
+		
+	</script>
+</body>
+</html>
